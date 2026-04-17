@@ -196,6 +196,12 @@ static int write_tree_recursive(IndexEntry *entries, int count, const char *pref
     // Serialize and write this tree
     void *data;
     size_t len;
+    
+    if (tree.count == 0) {
+        // Empty tree - shouldn't happen in normal use
+        return -1;
+    }
+    
     if (tree_serialize(&tree, &data, &len) != 0) {
         return -1;
     }
