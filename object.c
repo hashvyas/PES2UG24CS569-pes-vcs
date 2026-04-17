@@ -156,10 +156,28 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         return -1;
     }
     
-    // TODO: Add fsync and atomic rename in next commit
+    // Step 6: Flush to disk before rename
+    if (fsync(fd) != 0) {
+        close(fd);
+        unlink(temp_path);
+        return -1;
+    }
     close(fd);
-    unlink(temp_path);
-    return -1;
+    
+    // Step 7: Atomic rename to final path
+    if (rename(temp_path, path) != 0) {
+        unlink(temp_path);
+        return -1;
+    }
+    
+    // Step 8: Sync the directory to persist the rename
+    int dir_fd = open(shard_dir, O_RDONLY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
+    }
+    
+    return 0;
 }
 
 // Read an object from the store.
