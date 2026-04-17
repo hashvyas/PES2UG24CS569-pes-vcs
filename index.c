@@ -193,11 +193,50 @@ int index_load(Index *index) {
 //   - rename                           : atomically moving the temp file over the old index
 //
 // Returns 0 on success, -1 on error.
+
+// Comparison function for qsort
+static int compare_index_entries(const void *a, const void *b) {
+    return strcmp(((const IndexEntry *)a)->path, ((const IndexEntry *)b)->path);
+}
+
 int index_save(const Index *index) {
-    // TODO: Implement atomic index saving
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
+    // Step 1: Sort entries by path
+    Index sorted = *index;
+    qsort(sorted.entries, sorted.count, sizeof(IndexEntry), compare_index_entries);
+    
+    // Step 2: Write to temporary file
+    char temp_path[520];
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", INDEX_FILE);
+    
+    FILE *f = fopen(temp_path, "w");
+    if (!f) return -1;
+    
+    // Step 3: Write each entry in text format
+    for (int i = 0; i < sorted.count; i++) {
+        const IndexEntry *entry = &sorted.entries[i];
+        char hash_hex[HASH_HEX_SIZE + 1];
+        hash_to_hex(&entry->hash, hash_hex);
+        
+        fprintf(f, "%o %s %lu %u %s\n",
+                entry->mode,
+                hash_hex,
+                (unsigned long)entry->mtime_sec,
+                entry->size,
+                entry->path);
+    }
+    
+    // Step 4: Flush and sync to disk
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+    
+    // Step 5: Atomic rename
+    if (rename(temp_path, INDEX_FILE) != 0) {
+        unlink(temp_path);
+        return -1;
+    }
+    
+    return 0;
 }
 
 // Stage a file for the next commit.
