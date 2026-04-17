@@ -201,7 +201,29 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
         return -1;
     }
     
-    // TODO: Add parent detection and commit object creation in next commit
-    (void)message; (void)commit_id_out;
+    // Step 2: Try to read parent commit (may not exist for first commit)
+    Commit commit;
+    commit.tree = tree_id;
+    
+    ObjectID parent_id;
+    if (head_read(&parent_id) == 0) {
+        // We have a parent commit
+        commit.has_parent = 1;
+        commit.parent = parent_id;
+    } else {
+        // First commit (no parent)
+        commit.has_parent = 0;
+    }
+    
+    // Step 3: Fill in author and timestamp
+    const char *author = pes_author();
+    snprintf(commit.author, sizeof(commit.author), "%s", author);
+    commit.timestamp = (uint64_t)time(NULL);
+    
+    // Step 4: Copy the commit message
+    snprintf(commit.message, sizeof(commit.message), "%s", message);
+    
+    // TODO: Serialize and write commit object in next commit
+    (void)commit_id_out;
     return -1;
 }
