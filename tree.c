@@ -23,6 +23,14 @@
 #define MODE_EXEC      0100755
 #define MODE_DIR       0040000
 
+// ─── Forward declarations ───────────────────────────────────────────────────
+
+// Forward declaration for object_write
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+
+// Recursive helper to build tree from index entries at a given depth
+static int write_tree_recursive(IndexEntry *entries, int count, const char *prefix, ObjectID *id_out);
+
 // ─── PROVIDED ───────────────────────────────────────────────────────────────
 
 // Determine the object mode for a filesystem path.
@@ -116,6 +124,87 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 }
 
 // ─── TODO: Implement these ──────────────────────────────────────────────────
+
+// Recursive helper: builds a tree from entries that match the given prefix
+static int write_tree_recursive(IndexEntry *entries, int count, const char *prefix, ObjectID *id_out) {
+    Tree tree;
+    tree.count = 0;
+    
+    size_t prefix_len = strlen(prefix);
+    
+    for (int i = 0; i < count; i++) {
+        const char *path = entries[i].path;
+        
+        // Skip entries that don't match our prefix
+        if (prefix_len > 0) {
+            if (strncmp(path, prefix, prefix_len) != 0) continue;
+            if (path[prefix_len] != '/') continue;
+            path += prefix_len + 1; // Skip prefix and '/'
+        }
+        
+        // Find the next '/' to determine if this is a direct child or nested
+        const char *slash = strchr(path, '/');
+        
+        if (slash == NULL) {
+            // Direct file in this directory
+            TreeEntry *entry = &tree.entries[tree.count++];
+            entry->mode = entries[i].mode;
+            entry->hash = entries[i].hash;
+            strncpy(entry->name, path, sizeof(entry->name) - 1);
+            entry->name[sizeof(entry->name) - 1] = '\0';
+        } else {
+            // This is a subdirectory - extract the directory name
+            size_t dir_len = slash - path;
+            char dir_name[256];
+            if (dir_len >= sizeof(dir_name)) continue;
+            
+            memcpy(dir_name, path, dir_len);
+            dir_name[dir_len] = '\0';
+            
+            // Check if we already processed this subdirectory
+            int already_added = 0;
+            for (int j = 0; j < tree.count; j++) {
+                if (strcmp(tree.entries[j].name, dir_name) == 0) {
+                    already_added = 1;
+                    break;
+                }
+            }
+            
+            if (!already_added) {
+                // Recursively build the subtree
+                char subdir_prefix[512];
+                if (prefix_len > 0) {
+                    snprintf(subdir_prefix, sizeof(subdir_prefix), "%s/%s", prefix, dir_name);
+                } else {
+                    snprintf(subdir_prefix, sizeof(subdir_prefix), "%s", dir_name);
+                }
+                
+                ObjectID subtree_id;
+                if (write_tree_recursive(entries, count, subdir_prefix, &subtree_id) != 0) {
+                    return -1;
+                }
+                
+                TreeEntry *entry = &tree.entries[tree.count++];
+                entry->mode = MODE_DIR;
+                entry->hash = subtree_id;
+                strncpy(entry->name, dir_name, sizeof(entry->name) - 1);
+                entry->name[sizeof(entry->name) - 1] = '\0';
+            }
+        }
+    }
+    
+    // Serialize and write this tree
+    void *data;
+    size_t len;
+    if (tree_serialize(&tree, &data, &len) != 0) {
+        return -1;
+    }
+    
+    int rc = object_write(OBJ_TREE, data, len, id_out);
+    free(data);
+    
+    return rc;
+}
 
 // Build a tree hierarchy from the current index and write all tree
 // objects to the object store.
