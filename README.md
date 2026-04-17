@@ -107,12 +107,12 @@ export PES_AUTHOR="Your Name <your.email@example.com>"
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `object.c` | Content-addressable object store | ✅ Complete |
-| `tree.c` | Tree serialization and construction | ✅ Complete |
-| `index.c` | Staging area implementation | ✅ Complete |
-| `commit.c` | Commit creation and history | ✅ Complete |
-| `pes.c` | CLI entry point | ✅ Provided |
-| `pes.h` | Core data structures | ✅ Provided |
+| `object.c` | Content-addressable object store |  Complete |
+| `tree.c` | Tree serialization and construction |  Complete |
+| `index.c` | Staging area implementation |  Complete |
+| `commit.c` | Commit creation and history |  Complete |
+| `pes.c` | CLI entry point |  Provided |
+| `pes.h` | Core data structures |  Provided |
 
 ---
 
