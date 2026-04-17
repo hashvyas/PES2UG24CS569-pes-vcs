@@ -123,8 +123,42 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         return 0; // Object already exists, nothing to do
     }
     
-    // TODO: Continue with file writing in next commit
+    // Step 4: Get the target path and create shard directory
+    char path[512];
+    object_path(id_out, path, sizeof(path));
+    
+    // Extract shard directory (first 2 hex chars)
+    char hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(id_out, hex);
+    char shard_dir[512];
+    snprintf(shard_dir, sizeof(shard_dir), "%s/%.2s", OBJECTS_DIR, hex);
+    
+    // Create shard directory if it doesn't exist
+    mkdir(shard_dir, 0755); // Ignore error if already exists
+    
+    // Step 5: Write to temporary file in the same shard directory
+    char temp_path[520];
+    snprintf(temp_path, sizeof(temp_path), "%s/tmp_%s", shard_dir, hex + 2);
+    
+    int fd = open(temp_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0) {
+        free(full_object);
+        return -1;
+    }
+    
+    // Write the full object (header + data)
+    ssize_t written = write(fd, full_object, full_len);
     free(full_object);
+    
+    if (written != (ssize_t)full_len) {
+        close(fd);
+        unlink(temp_path);
+        return -1;
+    }
+    
+    // TODO: Add fsync and atomic rename in next commit
+    close(fd);
+    unlink(temp_path);
     return -1;
 }
 
