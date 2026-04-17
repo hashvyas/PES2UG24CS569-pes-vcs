@@ -243,7 +243,54 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
         return -1;
     }
     
-    // TODO: Add integrity check and data extraction in next commit
+    // Parse type and size from header
+    char type_str[16];
+    size_t data_size;
+    if (sscanf((char *)file_data, "%15s %zu", type_str, &data_size) != 2) {
+        free(file_data);
+        return -1;
+    }
+    
+    // Map type string to ObjectType
+    if (strcmp(type_str, "blob") == 0) {
+        *type_out = OBJ_BLOB;
+    } else if (strcmp(type_str, "tree") == 0) {
+        *type_out = OBJ_TREE;
+    } else if (strcmp(type_str, "commit") == 0) {
+        *type_out = OBJ_COMMIT;
+    } else {
+        free(file_data);
+        return -1;
+    }
+    
+    // Step 4: Verify integrity - recompute hash and compare
+    ObjectID computed_id;
+    compute_hash(file_data, file_size, &computed_id);
+    
+    if (memcmp(id->hash, computed_id.hash, HASH_SIZE) != 0) {
+        free(file_data);
+        return -1; // Corruption detected
+    }
+    
+    // Step 5 & 6: Extract data portion (after null byte)
+    size_t header_len = (null_pos - file_data) + 1; // +1 to skip the null byte
+    size_t actual_data_len = file_size - header_len;
+    
+    if (actual_data_len != data_size) {
+        free(file_data);
+        return -1; // Size mismatch
+    }
+    
+    // Allocate and copy data
+    *data_out = malloc(actual_data_len);
+    if (!*data_out) {
+        free(file_data);
+        return -1;
+    }
+    
+    memcpy(*data_out, file_data + header_len, actual_data_len);
+    *len_out = actual_data_len;
+    
     free(file_data);
-    return -1;
+    return 0;
 }
