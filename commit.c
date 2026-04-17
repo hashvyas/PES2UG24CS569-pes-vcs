@@ -223,7 +223,22 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     // Step 4: Copy the commit message
     snprintf(commit.message, sizeof(commit.message), "%s", message);
     
-    // TODO: Serialize and write commit object in next commit
-    (void)commit_id_out;
+    // Step 5: Serialize the commit to text format
+    void *commit_data;
+    size_t commit_len;
+    if (commit_serialize(&commit, &commit_data, &commit_len) != 0) {
+        fprintf(stderr, "error: failed to serialize commit\n");
+        return -1;
+    }
+    
+    // Step 6: Write commit object to the object store
+    if (object_write(OBJ_COMMIT, commit_data, commit_len, commit_id_out) != 0) {
+        free(commit_data);
+        fprintf(stderr, "error: failed to write commit object\n");
+        return -1;
+    }
+    free(commit_data);
+    
+    // TODO: Update HEAD in next commit
     return -1;
 }
