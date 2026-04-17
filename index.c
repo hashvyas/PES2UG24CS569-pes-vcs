@@ -200,9 +200,10 @@ static int compare_index_entries(const void *a, const void *b) {
 }
 
 int index_save(const Index *index) {
-    // Step 1: Sort entries by path
-    Index sorted = *index;
-    qsort(sorted.entries, sorted.count, sizeof(IndexEntry), compare_index_entries);
+    // Step 1: Sort entries by path (need to cast away const for qsort)
+    // We sort in-place since the index will be reloaded anyway
+    Index *mutable_index = (Index *)index;
+    qsort(mutable_index->entries, mutable_index->count, sizeof(IndexEntry), compare_index_entries);
     
     // Step 2: Write to temporary file
     char temp_path[520];
@@ -212,8 +213,8 @@ int index_save(const Index *index) {
     if (!f) return -1;
     
     // Step 3: Write each entry in text format
-    for (int i = 0; i < sorted.count; i++) {
-        const IndexEntry *entry = &sorted.entries[i];
+    for (int i = 0; i < index->count; i++) {
+        const IndexEntry *entry = &index->entries[i];
         char hash_hex[HASH_HEX_SIZE + 1];
         hash_to_hex(&entry->hash, hash_hex);
         
@@ -271,14 +272,14 @@ int index_add(Index *index, const char *path) {
     }
     
     // Read file data
-    void *data = malloc(file_size);
-    if (!data) {
+    void *file_data = malloc(file_size);
+    if (!file_data) {
         fclose(f);
         return -1;
     }
     
-    if (fread(data, 1, file_size, f) != (size_t)file_size) {
-        free(data);
+    if (fread(file_data, 1, file_size, f) != (size_t)file_size) {
+        free(file_data);
         fclose(f);
         return -1;
     }
@@ -286,11 +287,11 @@ int index_add(Index *index, const char *path) {
     
     // Step 2: Write blob to object store
     ObjectID blob_id;
-    if (object_write(OBJ_BLOB, data, file_size, &blob_id) != 0) {
-        free(data);
+    if (object_write(OBJ_BLOB, file_data, file_size, &blob_id) != 0) {
+        free(file_data);
         return -1;
     }
-    free(data);
+    free(file_data);
     
     // Step 3: Get file metadata
     struct stat st;
