@@ -231,32 +231,7 @@ int tree_from_index(ObjectID *id_out) {
         return -1;
     }
     
-    // Step 2: Build a flat tree (no subdirectories yet)
-    Tree tree;
-    tree.count = 0;
-    
-    for (int i = 0; i < index.count; i++) {
-        // For now, only handle files in root (no '/' in path)
-        if (strchr(index.entries[i].path, '/') != NULL) {
-            continue; // Skip nested paths for now
-        }
-        
-        TreeEntry *entry = &tree.entries[tree.count++];
-        entry->mode = index.entries[i].mode;
-        entry->hash = index.entries[i].hash;
-        strncpy(entry->name, index.entries[i].path, sizeof(entry->name) - 1);
-        entry->name[sizeof(entry->name) - 1] = '\0';
-    }
-    
-    // Step 3: Serialize and write the tree
-    void *data;
-    size_t len;
-    if (tree_serialize(&tree, &data, &len) != 0) {
-        return -1;
-    }
-    
-    int rc = object_write(OBJ_TREE, data, len, id_out);
-    free(data);
-    
-    return rc;
+    // Step 2: Use recursive helper to build the complete tree hierarchy
+    // Empty prefix means start from root
+    return write_tree_recursive(index.entries, index.count, "", id_out);
 }
